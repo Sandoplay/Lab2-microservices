@@ -6,7 +6,7 @@ package edu.levytskyi.lab2microservices.repository;
  * @since 25.03.2025 - 15.14
  */
 
-import edu.levytskyi.lab2microservices.entity.User;
+import edu.levytskyi.lab2microservices.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 

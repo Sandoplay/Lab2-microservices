@@ -1,12 +1,4 @@
-package edu.levytskyi.lab2microservices.entity;
-/* @author Sandoplay
- * @project Lab1-miroservices
- * @class Transaction
- * @version 1.0.0
- * @since 25.03.2025 - 15.08
- */
-
-// Transaction.java
+package edu.levytskyi.lab2microservices.model;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -14,7 +6,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "transactions")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Transaction {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -29,14 +21,13 @@ public class Transaction {
     private TransactionType type; // BUY, SELL
 
     @Column(nullable = false)
-    private Double amount;
+    private Double amount; // Amount of cryptocurrency
 
     @Column(nullable = false)
-    private Double price; // Ціна за одиницю криптовалюти на момент транзакції
+    private Double price; // Price per unit of cryptocurrency at the time of transaction
 
     @Column(nullable = false)
     private LocalDateTime timestamp;
-
 
     public enum TransactionType {
         BUY, SELL

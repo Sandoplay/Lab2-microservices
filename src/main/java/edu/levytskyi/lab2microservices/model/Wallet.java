@@ -1,19 +1,13 @@
-package edu.levytskyi.lab2microservices.entity;
-/* @author Sandoplay
- * @project Lab1-miroservices
- * @class Wallet
- * @version 1.0.0
- * @since 25.03.2025 - 15.07
- */
-
-// Wallet.java
+package edu.levytskyi.lab2microservices.model;
 
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.List;
+
 @Entity
 @Table(name = "wallets")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Wallet {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -27,6 +21,10 @@ public class Wallet {
     @JoinColumn(name = "currency_id", nullable = false)
     private Currency currency;
 
+    // Balance typically refers to the amount of cryptocurrency held
     @Column(nullable = false)
     private Double balance;
+
+    @OneToMany(mappedBy = "wallet", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<Transaction> transactions;
 }

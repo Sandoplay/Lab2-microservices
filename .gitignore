@@ -31,3 +31,5 @@ build/
 
 ### VS Code ###
 .vscode/
+/src/mergeJavasrc_put-in-scr-folder.ps1
+/src/merged_source_code.txt

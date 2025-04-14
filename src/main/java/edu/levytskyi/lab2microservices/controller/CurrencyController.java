@@ -1,58 +1,66 @@
 package edu.levytskyi.lab2microservices.controller;
-/* @author Sandoplay
- * @project Lab1-miroservices
- * @class asf
- * @version 1.0.0
- * @since 25.03.2025 - 15.25
- */
 
-
-import edu.levytskyi.lab2microservices.entity.Currency;
+import edu.levytskyi.lab2microservices.dto.CurrencyDTO;
 import edu.levytskyi.lab2microservices.service.CurrencyService;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.validation.Valid; // Додано для валідації
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated; // Додано
 import org.springframework.web.bind.annotation.*;
-
+// ... other imports ...
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/currencies")
+@RequiredArgsConstructor
+@Validated // Увімкнення валідації
 public class CurrencyController {
 
-    @Autowired
-    private CurrencyService currencyService;
+    private final CurrencyService currencyService;
 
-    @GetMapping
-    public ResponseEntity<List<Currency>> getAllCurrencies() {
+    @GetMapping // Повертає DTO
+    public ResponseEntity<List<CurrencyDTO>> getAllCurrencies() {
         return ResponseEntity.ok(currencyService.getAllCurrencies());
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<Currency> getCurrencyById(@PathVariable Long id) {
+    @GetMapping("/{id}") // Повертає DTO
+    public ResponseEntity<CurrencyDTO> getCurrencyById(@PathVariable Long id) {
         return ResponseEntity.ok(currencyService.getCurrencyById(id));
     }
 
-    @GetMapping("/symbol/{symbol}")
-    public ResponseEntity<Currency> getCurrencyBySymbol(@PathVariable String symbol) {
-        return currencyService.findBySymbol(symbol)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-    }
-    @PostMapping
-    public ResponseEntity<Currency> createCurrency(@RequestBody Currency currency) {
-        Currency createdCurrency = currencyService.createCurrency(currency);
-        return new ResponseEntity<>(createdCurrency, HttpStatus.CREATED);
-    }
-    //Ендпоінт для оновлення
-    @PutMapping("/updateFakePrice/{symbol}")
-    public ResponseEntity<String> updateFakePrice(@PathVariable String symbol, @RequestParam double newPrice) {
-        try {
-            currencyService.updateFakePrice(symbol, newPrice);
-            return ResponseEntity.ok("Fake price for " + symbol + " updated to " + newPrice);
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-        }
+    @GetMapping("/symbol/{symbol}") // Повертає DTO
+    public ResponseEntity<CurrencyDTO> getCurrencyBySymbol(@PathVariable String symbol) {
+        return ResponseEntity.ok(currencyService.getCurrencyBySymbol(symbol));
     }
 
+    @PostMapping // Приймає та повертає DTO, використовує @Valid
+    public ResponseEntity<CurrencyDTO> createCurrency(@Valid @RequestBody CurrencyDTO currencyDTO) {
+        if (currencyDTO.getId() != null) { return ResponseEntity.badRequest().build(); } // Перевірка ID
+        CurrencyDTO createdCurrency = currencyService.createCurrency(currencyDTO);
+        return new ResponseEntity<>(createdCurrency, HttpStatus.CREATED);
+    }
+
+    @PutMapping("/{id}") // Приймає та повертає DTO, використовує @Valid
+    public ResponseEntity<CurrencyDTO> updateCurrency(@PathVariable Long id, @Valid @RequestBody CurrencyDTO currencyDTO) {
+        if (currencyDTO.getId() != null && !currencyDTO.getId().equals(id)) { return ResponseEntity.badRequest().build(); } // Перевірка ID
+        currencyDTO.setId(id);
+        CurrencyDTO updatedCurrency = currencyService.updateCurrency(id, currencyDTO);
+        return ResponseEntity.ok(updatedCurrency);
+    }
+
+    // Новий ендпоінт видалення
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteCurrency(@PathVariable Long id) {
+        currencyService.deleteCurrency(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // Ендпоінт оновлення ціни (змінився виклик сервісу)
+    @PutMapping("/update-price/{symbol}")
+    public ResponseEntity<String> updateCurrencyPrice(@PathVariable String symbol, @RequestParam double newPrice) {
+        if (newPrice < 0) { return ResponseEntity.badRequest().body("Price cannot be negative."); }
+        currencyService.updatePriceInDatabase(symbol, newPrice); // Новий метод сервісу
+        return ResponseEntity.ok("Price for " + symbol.toUpperCase() + " updated to " + newPrice);
+    }
 }

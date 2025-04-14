@@ -1,12 +1,12 @@
 package edu.levytskyi.lab2microservices.repository;
 /* @author Sandoplay
  * @project Lab1-miroservices
- * @class asf
+ * @class CurrencyRepository
  * @version 1.0.0
  * @since 25.03.2025 - 15.19
  */
 
-import edu.levytskyi.lab2microservices.entity.Currency;
+import edu.levytskyi.lab2microservices.model.Currency;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 

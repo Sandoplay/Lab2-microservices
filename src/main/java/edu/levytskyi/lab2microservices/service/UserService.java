@@ -1,49 +1,80 @@
 package edu.levytskyi.lab2microservices.service;
-/* @author Sandoplay
- * @project Lab1-miroservices
- * @class as
- * @version 1.0.0
- * @since 25.03.2025 - 15.19
- */
 
-import edu.levytskyi.lab2microservices.entity.User;
+import edu.levytskyi.lab2microservices.dto.UserCreateDTO;
+import edu.levytskyi.lab2microservices.dto.UserDTO;
+import edu.levytskyi.lab2microservices.model.User;
+import edu.levytskyi.lab2microservices.exception.ResourceNotFoundException;
+import edu.levytskyi.lab2microservices.mapper.UserMapper;
 import edu.levytskyi.lab2microservices.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+// ... other imports ...
 import java.util.List;
-import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class UserService {
 
-    @Autowired
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
+    private final UserMapper userMapper; // Додано Mapper
+    // private final PasswordEncoder passwordEncoder; // Для хешування паролів
 
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
+    @Transactional(readOnly = true)
+    public List<UserDTO> getAllUsers() {
+        return userRepository.findAll().stream()
+                .map(userMapper::toDto).collect(Collectors.toList()); // Повертає DTO
     }
 
-    public User getUserById(Long id) {
-        return userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));
+    @Transactional(readOnly = true)
+    public UserDTO getUserById(Long id) {
+        return userRepository.findById(id).map(userMapper::toDto) // Повертає DTO
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id)); // Використовує новий Exception
     }
 
-    public User createUser(User user) {
-        //  Додати валідацію (наприклад, перевірку унікальності username)
-        return userRepository.save(user);
+    // Метод пошуку за ім'ям користувача (змінився тип повернення)
+    @Transactional(readOnly = true)
+    public UserDTO getUserByUsername(String username) {
+        return userRepository.findByUsername(username).map(userMapper::toDto) // Повертає DTO
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username)); // Використовує новий Exception
     }
 
-    public User updateUser(Long id, User updatedUser) {
-        User user = getUserById(id);
-        user.setUsername(updatedUser.getUsername());
-        user.setEmail(updatedUser.getEmail());
-        // Оновлення паролю потрібно робити окремим методом з хешуванням!
-        return userRepository.save(user);
+    @Transactional
+    public UserDTO createUser(UserCreateDTO userCreateDTO) { // Приймає DTO
+        userRepository.findByUsername(userCreateDTO.getUsername()).ifPresent(u -> { // Перевірка на дублікат
+            throw new IllegalArgumentException("Username already exists: " + userCreateDTO.getUsername()); });
+
+        User user = userMapper.toEntity(userCreateDTO); // Маппінг з DTO
+        // user.setPassword(passwordEncoder.encode(userCreateDTO.getPassword())); // Важливо хешувати!
+        user.setPassword(userCreateDTO.getPassword()); // Тимчасово без хешування
+
+        User savedUser = userRepository.save(user);
+        return userMapper.toDto(savedUser); // Повертає DTO
     }
 
+    @Transactional
+    public UserDTO updateUser(Long id, UserDTO userDTO) { // Приймає DTO для оновлення
+        User existingUser = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+
+        // Перевірка на конфлікт username при зміні
+        if (!existingUser.getUsername().equals(userDTO.getUsername())) {
+            userRepository.findByUsername(userDTO.getUsername()).ifPresent(u -> {
+                throw new IllegalArgumentException("Username already exists: " + userDTO.getUsername()); });
+        }
+        // Оновлення тільки дозволених полів (пароль окремо!)
+        existingUser.setUsername(userDTO.getUsername());
+        existingUser.setEmail(userDTO.getEmail());
+
+        User updatedUser = userRepository.save(existingUser);
+        return userMapper.toDto(updatedUser); // Повертає DTO
+    }
+
+    @Transactional
     public void deleteUser(Long id) {
-        userRepository.deleteById(id);
-    }
-    public Optional<User> findByUsername(String username) { //Метод для пошуку юзера
-        return userRepository.findByUsername(username);
+        User user = userRepository.findById(id) // Перевірка перед видаленням
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+        userRepository.delete(user); // Каскадне видалення спрацює для гаманців
     }
 }

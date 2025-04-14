@@ -1,52 +1,76 @@
 package edu.levytskyi.lab2microservices.service;
-/* @author Sandoplay
- * @project Lab1-miroservices
- * @class serv
- * @version 1.0.0
- * @since 25.03.2025 - 15.21
- */
 
-// WalletService.java
-
-import edu.levytskyi.lab2microservices.entity.User;
-import edu.levytskyi.lab2microservices.entity.Currency;
-import edu.levytskyi.lab2microservices.entity.Wallet;
+import edu.levytskyi.lab2microservices.dto.WalletCreateDTO;
+import edu.levytskyi.lab2microservices.dto.WalletDTO;
+import edu.levytskyi.lab2microservices.model.Currency;
+import edu.levytskyi.lab2microservices.model.User;
+import edu.levytskyi.lab2microservices.model.Wallet;
+import edu.levytskyi.lab2microservices.exception.ResourceNotFoundException;
+import edu.levytskyi.lab2microservices.mapper.WalletMapper;
 import edu.levytskyi.lab2microservices.repository.CurrencyRepository;
 import edu.levytskyi.lab2microservices.repository.UserRepository;
 import edu.levytskyi.lab2microservices.repository.WalletRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+// ... other imports ...
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class WalletService {
 
-    @Autowired private WalletRepository walletRepository;
-    @Autowired private UserRepository userRepository;
-    @Autowired private CurrencyRepository currencyRepository;
+    private final WalletRepository walletRepository;
+    private final UserRepository userRepository; // Додано
+    private final CurrencyRepository currencyRepository; // Додано
+    private final WalletMapper walletMapper; // Додано Mapper
 
-    public List<Wallet> getAllWallets() {
-        return walletRepository.findAll();
+    @Transactional(readOnly = true)
+    public List<WalletDTO> getAllWallets() {
+        return walletRepository.findAll().stream()
+                .map(walletMapper::toDto).collect(Collectors.toList()); // Повертає DTO
     }
 
-    public Wallet getWalletById(Long id) {
-        return walletRepository.findById(id).orElseThrow(() -> new RuntimeException("Wallet not found"));
+    @Transactional(readOnly = true)
+    public WalletDTO getWalletById(Long id) {
+        return walletRepository.findById(id).map(walletMapper::toDto) // Повертає DTO
+                .orElseThrow(() -> new ResourceNotFoundException("Wallet not found with id: " + id)); // Використовує новий Exception
     }
-    //Отримання всіх гаманців користувача
-    public List<Wallet> getWalletsByUserId(Long userId) {
-        return walletRepository.findByUserId(userId);
+
+    // Метод отримання гаманців користувача (змінився тип повернення + перевірка)
+    @Transactional(readOnly = true)
+    public List<WalletDTO> getWalletsByUserId(Long userId) {
+        if (!userRepository.existsById(userId)) { // Перевірка існування користувача
+            throw new ResourceNotFoundException("User not found with id: " + userId); }
+        return walletRepository.findByUserId(userId).stream()
+                .map(walletMapper::toDto).collect(Collectors.toList()); // Повертає DTO
     }
+
     @Transactional
-    public Wallet createWallet(Long userId, Long currencyId, Double initialBalance) {
-        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
-        Currency currency = currencyRepository.findById(currencyId).orElseThrow(()-> new RuntimeException("Currency not found"));
+    public WalletDTO createWallet(WalletCreateDTO walletCreateDTO) { // Приймає DTO
+        User user = userRepository.findById(walletCreateDTO.getUserId()) // Знаходить User
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + walletCreateDTO.getUserId()));
+        Currency currency = currencyRepository.findById(walletCreateDTO.getCurrencyId()) // Знаходить Currency
+                .orElseThrow(() -> new ResourceNotFoundException("Currency not found with id: " + walletCreateDTO.getCurrencyId()));
 
-        Wallet wallet = new Wallet();
-        wallet.setUser(user);
+        // Перевірка на дублікат гаманця для користувача/валюти
+        walletRepository.findByUserIdAndCurrencyId(user.getId(), currency.getId()).ifPresent(w -> {
+            throw new IllegalArgumentException("User already has a wallet for currency: " + currency.getSymbol()); });
+
+        Wallet wallet = walletMapper.toEntity(walletCreateDTO); // Маппінг з DTO
+        wallet.setUser(user); // Встановлення зв'язків
         wallet.setCurrency(currency);
-        wallet.setBalance(initialBalance);
-        return walletRepository.save(wallet);
+
+        Wallet savedWallet = walletRepository.save(wallet);
+        return walletMapper.toDto(savedWallet); // Повертає DTO
+    }
+
+    // Новий метод видалення
+    @Transactional
+    public void deleteWallet(Long id) {
+        Wallet wallet = walletRepository.findById(id) // Перевірка перед видаленням
+                .orElseThrow(() -> new ResourceNotFoundException("Wallet not found with id: " + id));
+        walletRepository.delete(wallet); // Каскадне видалення спрацює для транзакцій
     }
 }

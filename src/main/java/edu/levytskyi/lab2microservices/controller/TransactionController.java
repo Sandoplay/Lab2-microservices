@@ -1,47 +1,49 @@
 package edu.levytskyi.lab2microservices.controller;
-/* @author Sandoplay
- * @project Lab1-miroservices
- * @class asvasv
- * @version 1.0.0
- * @since 25.03.2025 - 15.25
- */
 
-
-import edu.levytskyi.lab2microservices.entity.Transaction;
+import edu.levytskyi.lab2microservices.dto.TransactionCreateDTO; // Новий DTO
+import edu.levytskyi.lab2microservices.dto.TransactionDTO; // Новий DTO
 import edu.levytskyi.lab2microservices.service.TransactionService;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.validation.Valid; // Додано
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated; // Додано
 import org.springframework.web.bind.annotation.*;
-
+// ... other imports ...
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/transactions")
+@RequiredArgsConstructor
+@Validated // Увімкнення валідації
 public class TransactionController {
 
-    @Autowired private TransactionService transactionService;
+    private final TransactionService transactionService;
 
-    @GetMapping
-    public ResponseEntity<List<Transaction>> getAllTransactions() {
+    @GetMapping // Повертає DTO
+    public ResponseEntity<List<TransactionDTO>> getAllTransactions() {
         return ResponseEntity.ok(transactionService.getAllTransactions());
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<Transaction> getTransactionById(@PathVariable Long id) {
+    @GetMapping("/{id}") // Повертає DTO
+    public ResponseEntity<TransactionDTO> getTransactionById(@PathVariable Long id) {
         return ResponseEntity.ok(transactionService.getTransactionById(id));
     }
-    //Отримання всіх транзакцій по гаманцю
-    @GetMapping("/wallet/{walletId}")
-    public ResponseEntity<List<Transaction>> getTransactionsByWalletId(@PathVariable Long walletId) {
-        List<Transaction> transactions = transactionService.getTransactionsByWalletId(walletId);
-        return new ResponseEntity<>(transactions, HttpStatus.OK);
+
+    @GetMapping("/wallet/{walletId}") // Повертає DTO
+    public ResponseEntity<List<TransactionDTO>> getTransactionsByWalletId(@PathVariable Long walletId) {
+        return ResponseEntity.ok(transactionService.getTransactionsByWalletId(walletId));
     }
 
-    @PostMapping
-    public ResponseEntity<Transaction> createTransaction(@RequestParam Long walletId, @RequestParam Transaction.TransactionType type, @RequestParam Double amount) {
-        Transaction createdTransaction = transactionService.createTransaction(walletId, type, amount);
+    // Новий ендпоінт
+    @GetMapping("/user/{userId}") // Повертає DTO
+    public ResponseEntity<List<TransactionDTO>> getTransactionsByUserId(@PathVariable Long userId) {
+        return ResponseEntity.ok(transactionService.getTransactionsByUserId(userId));
+    }
+
+    @PostMapping // Приймає CreateDTO, повертає DTO, використовує @Valid
+    public ResponseEntity<TransactionDTO> createTransaction(@Valid @RequestBody TransactionCreateDTO transactionCreateDTO) {
+        TransactionDTO createdTransaction = transactionService.createTransaction(transactionCreateDTO);
         return new ResponseEntity<>(createdTransaction, HttpStatus.CREATED);
     }
-
 }

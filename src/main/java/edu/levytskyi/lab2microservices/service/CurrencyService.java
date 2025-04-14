@@ -1,73 +1,101 @@
 package edu.levytskyi.lab2microservices.service;
-/* @author Sandoplay
- * @project Lab1-miroservices
- * @class asdff
- * @version 1.0.0
- * @since 25.03.2025 - 15.23
- */
 
-// CurrencyService.java (Імітація отримання курсу)
-
-import edu.levytskyi.lab2microservices.entity.Currency;
+import edu.levytskyi.lab2microservices.dto.CurrencyDTO;
+import edu.levytskyi.lab2microservices.model.Currency;
+import edu.levytskyi.lab2microservices.exception.ResourceNotFoundException;
+import edu.levytskyi.lab2microservices.mapper.CurrencyMapper;
 import edu.levytskyi.lab2microservices.repository.CurrencyRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class CurrencyService {
 
-    @Autowired
-    private CurrencyRepository currencyRepository;
-
+    private final CurrencyRepository currencyRepository;
+    private final CurrencyMapper currencyMapper;
     private static final Map<String, Double> FAKE_PRICES = new HashMap<>();
+    static { // Ініціалізація цін
+        FAKE_PRICES.put("BTC", 65000.0); FAKE_PRICES.put("ETH", 3500.0);
+        FAKE_PRICES.put("LTC", 180.0); FAKE_PRICES.put("SOL", 150.0);
+        FAKE_PRICES.put("RVN", 5.0);
+    }
 
-    //Статичний блок для заповнення
-    static {
-        FAKE_PRICES.put("BTC", 45000.0);
-        FAKE_PRICES.put("ETH", 3000.0);
-        FAKE_PRICES.put("LTC", 150.0);
+    @Transactional(readOnly = true)
+    public List<CurrencyDTO> getAllCurrencies() {
+        return currencyRepository.findAll().stream()
+                .map(currencyMapper::toDto).collect(Collectors.toList());
     }
-    public List<Currency> getAllCurrencies() {
-        return currencyRepository.findAll();
-    }
-    public Optional<Currency> findBySymbol(String symbol) { //Пошук по символу
-        return currencyRepository.findBySymbol(symbol);
-    }
-    //Метод для створення нової валюти
-    public Currency createCurrency(Currency currency) {
 
-        return currencyRepository.save(currency);
+    @Transactional(readOnly = true)
+    public CurrencyDTO getCurrencyById(Long id) {
+        return currencyRepository.findById(id).map(currencyMapper::toDto)
+                .orElseThrow(() -> new ResourceNotFoundException("Currency not found with id: " + id));
     }
-    public Currency getCurrencyById(Long id) {
-        return currencyRepository.findById(id).orElseThrow(() -> new RuntimeException("Currency not found"));
+
+    @Transactional(readOnly = true)
+    public CurrencyDTO getCurrencyBySymbol(String symbol) {
+        return currencyRepository.findBySymbol(symbol.toUpperCase()).map(currencyMapper::toDto)
+                .orElseThrow(() -> new ResourceNotFoundException("Currency not found with symbol: " + symbol));
     }
-    //  Імітація отримання поточного курсу.
-    //  У реальному застосунку тут був би запит до API біржі.
+
+    @Transactional
+    public CurrencyDTO createCurrency(CurrencyDTO currencyDTO) {
+        currencyRepository.findBySymbol(currencyDTO.getSymbol().toUpperCase()).ifPresent(c -> {
+            throw new IllegalArgumentException("Currency symbol already exists: " + currencyDTO.getSymbol()); });
+        Currency currency = currencyMapper.toEntity(currencyDTO);
+        currency.setSymbol(currency.getSymbol().toUpperCase());
+        currency.setCurrentPrice(getCurrentPrice(currency.getSymbol())); // Використання методу
+        Currency savedCurrency = currencyRepository.save(currency);
+        return currencyMapper.toDto(savedCurrency);
+    }
+
+    @Transactional
+    public CurrencyDTO updateCurrency(Long id, CurrencyDTO currencyDTO) {
+        Currency existingCurrency = currencyRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Currency not found with id: " + id));
+        Optional<Currency> conflictingCurrency = currencyRepository.findBySymbol(currencyDTO.getSymbol().toUpperCase());
+        if(conflictingCurrency.isPresent() && !conflictingCurrency.get().getId().equals(id)) {
+            throw new IllegalArgumentException("Currency symbol already exists: " + currencyDTO.getSymbol()); }
+
+        currencyMapper.updateEntityFromDto(currencyDTO, existingCurrency);
+        existingCurrency.setSymbol(existingCurrency.getSymbol().toUpperCase());
+        existingCurrency.setCurrentPrice(getCurrentPrice(existingCurrency.getSymbol())); // Оновлення ціни
+        Currency updatedCurrency = currencyRepository.save(existingCurrency);
+        return currencyMapper.toDto(updatedCurrency);
+    }
+
+    @Transactional
+    public void deleteCurrency(Long id) {
+        if (!currencyRepository.existsById(id)) { throw new ResourceNotFoundException("Currency not found with id: " + id); }
+        currencyRepository.deleteById(id);
+    }
+
+    // Метод для отримання ціни (змінився)
     public double getCurrentPrice(String symbol) {
-        //Перевірка чи є символ серед доступних
-        if (!FAKE_PRICES.containsKey(symbol)) {
-            throw new RuntimeException("Currency not supported: " + symbol);
-        }
-        //  Повертаємо "фейкову" ціну.
-        return FAKE_PRICES.get(symbol);
-    }
-    //Оновлення фейкової ціни
-    public void updateFakePrice(String symbol, double newPrice) {
-        if (!FAKE_PRICES.containsKey(symbol)) {
-            throw new RuntimeException("Currency not supported: " + symbol);
-        }
-        FAKE_PRICES.put(symbol, newPrice);
-
-        //Опціональне оновлення ціни в базі даних
-        currencyRepository.findBySymbol(symbol).ifPresent(currency -> {
-            currency.setCurrentPrice(newPrice);
-            currencyRepository.save(currency);
-        });
+        String upperSymbol = symbol.toUpperCase();
+        Optional<Currency> dbCurrency = currencyRepository.findBySymbol(upperSymbol);
+        if (dbCurrency.isPresent()) { return dbCurrency.get().getCurrentPrice(); }
+        if (!FAKE_PRICES.containsKey(upperSymbol)) {
+            throw new ResourceNotFoundException("Pricing not available for currency: " + symbol); }
+        return FAKE_PRICES.get(upperSymbol);
     }
 
+    // Метод для оновлення ціни (змінився)
+    @Transactional
+    public void updatePriceInDatabase(String symbol, double newPrice) {
+        String upperSymbol = symbol.toUpperCase();
+        Currency currency = currencyRepository.findBySymbol(upperSymbol)
+                .orElseThrow(() -> new ResourceNotFoundException("Currency not found with symbol: " + symbol));
+        currency.setCurrentPrice(newPrice);
+        currencyRepository.save(currency);
+        FAKE_PRICES.put(upperSymbol, newPrice); // Оновлення кешу
+    }
 }
